@@ -22,7 +22,9 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,43 +43,41 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : ComponentActivity() {
+    // Core Components
     private lateinit var tts: TextToSpeech
     private lateinit var speechRecognizer: SpeechRecognizer
+    private lateinit var audioManager: AudioManager
+    private lateinit var wifiManager: WifiManager
+    private val prefs by lazy { getSharedPreferences("ZiraPrefs", Context.MODE_PRIVATE) }
+    private val handler = Handler(Looper.getMainLooper())
+
+    // State Management
     private var isListening by mutableStateOf(false)
     private var statusMessage by mutableStateOf("Ready - Long press Volume Up to speak")
     private var lastCommand by mutableStateOf("")
-    private val prefs by lazy { getSharedPreferences("ZiraPrefs", Context.MODE_PRIVATE) }
-    private lateinit var audioManager: AudioManager
-    private lateinit var wifiManager: WifiManager
 
+    // Button Press Tracking
     private var buttonPressStartTime = 0L
-    private val LONG_PRESS_THRESHOLD = 500L
-    private val handler = Handler(Looper.getMainLooper())
+    private val longPressThreshold = 500L
     private var isVolumeButtonPressed = false
     private var capturedCommand: String? = null
 
-    // Command handler interface for extensibility
-    private interface CommandHandler {
-        fun canHandle(command: String): Boolean
-        fun execute(command: String)
-    }
-
-    private val commandHandlers = mutableListOf<CommandHandler>()
+    // Command System
+    private val commandRegistry = CommandRegistry()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 100)
-        }
+        // Check permissions
+        checkPermissions()
 
+        // Initialize services
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
         initializeTTS()
         initializeSpeechRecognizer()
-        registerCommandHandlers()
+        registerAllCommands()
 
         setContent {
             ZiraTheme {
@@ -86,11 +86,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ==================== INITIALIZATION ====================
+
+    private fun checkPermissions() {
+        val permissions = mutableListOf<String>()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.RECORD_AUDIO)
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+            != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.CALL_PHONE)
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.READ_CONTACTS)
+        }
+
+        if (permissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 100)
+        }
+    }
+
     private fun initializeTTS() {
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts.language = Locale.US
-                speak("Zira is ready. Long press Volume Up to activate.")
+                speak("Zira is ready. Long press Volume Up to activate voice commands.")
             }
         }
     }
@@ -110,21 +135,21 @@ class MainActivity : ComponentActivity() {
 
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
-
-            override fun onEndOfSpeech() {
-                // Keep isListening true until user releases button or timeout
-            }
+            override fun onEndOfSpeech() {}
 
             override fun onError(error: Int) {
                 isListening = false
-                val errorMessage = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH -> "No speech detected"
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
-                    SpeechRecognizer.ERROR_NETWORK -> "Network error"
-                    else -> "Recognition error"
+                when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH,
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                        statusMessage = "No speech detected"
+                        speak("I didn't catch that. Please try again.")
+                    }
+                    else -> {
+                        statusMessage = "Recognition error"
+                        speak("Sorry, there was an error.")
+                    }
                 }
-                statusMessage = "Error: $errorMessage"
-                speak("Sorry, I didn't catch that.")
             }
 
             override fun onResults(results: Bundle?) {
@@ -133,11 +158,10 @@ class MainActivity : ComponentActivity() {
 
                 if (command != null) {
                     capturedCommand = command
-                    lastCommand = "You said: \"$command\""
+                    lastCommand = "\"$command\""
                     statusMessage = lastCommand
                 } else {
                     statusMessage = "No command detected"
-                    speak("I didn't hear anything.")
                 }
             }
 
@@ -152,84 +176,130 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    private fun registerCommandHandlers() {
-        // Time Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) = command.contains("time")
-            override fun execute(command: String) {
+    // ==================== COMMAND SYSTEM ====================
+
+    inner class CommandRegistry {
+        private val commands = mutableListOf<Command>()
+
+        fun register(command: Command) {
+            commands.add(command)
+        }
+
+        fun execute(input: String) {
+            val normalized = input.lowercase().trim()
+
+            // Find first matching command
+            val command = commands.firstOrNull { it.matches(normalized) }
+
+            if (command != null) {
+                command.execute(normalized)
+            } else {
+                speak("I heard: $input. But I don't understand that command yet.")
+                statusMessage = "Unknown command"
+            }
+
+            // Reset status after 3 seconds
+            handler.postDelayed({
+                statusMessage = "Ready - Long press Volume Up to speak"
+            }, 3000)
+        }
+    }
+
+    abstract inner class Command(
+        val keywords: List<String>
+    ) {
+        abstract fun execute(input: String)
+
+        fun matches(input: String): Boolean {
+            return keywords.any { keyword -> input.contains(keyword) }
+        }
+    }
+
+    private fun registerAllCommands() {
+
+        // ===== TIME & DATE COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("time", "what time")
+        ) {
+            override fun execute(input: String) {
                 val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
                 speak("The time is $time")
-                statusMessage = "Current time: $time"
+                statusMessage = "Time: $time"
             }
         })
 
-        // Date Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("date") || command.contains("day") || command.contains("today")
-            override fun execute(command: String) {
+        commandRegistry.register(object : Command(
+            keywords = listOf("date", "day", "today", "what day")
+        ) {
+            override fun execute(input: String) {
                 val date = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(Date())
                 speak("Today is $date")
                 statusMessage = "Date: $date"
             }
         })
 
-        // Battery Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("battery") || command.contains("charge")
-            override fun execute(command: String) {
-                val batteryLevel = getBatteryLevel()
-                val status = if (isCharging()) "and charging" else ""
-                speak("Battery is at $batteryLevel percent $status")
-                statusMessage = "Battery: $batteryLevel% $status"
+        // ===== BATTERY COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("battery", "charge", "power")
+        ) {
+            override fun execute(input: String) {
+                val level = getBatteryLevel()
+                val charging = if (isCharging()) "and charging" else ""
+                speak("Battery is at $level percent $charging")
+                statusMessage = "Battery: $level% $charging"
             }
         })
 
-        // Volume Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("volume") || command.contains("sound")
-            override fun execute(command: String) {
+        // ===== VOLUME COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("volume", "sound")
+        ) {
+            override fun execute(input: String) {
                 when {
-                    command.contains("up") || command.contains("increase") || command.contains("louder") -> {
+                    input.contains("up") || input.contains("increase") || input.contains("louder") -> {
                         adjustVolume(AudioManager.ADJUST_RAISE)
                         speak("Volume increased")
+                        statusMessage = "Volume up"
                     }
-                    command.contains("down") || command.contains("decrease") || command.contains("lower") -> {
+                    input.contains("down") || input.contains("decrease") || input.contains("lower") || input.contains("quiet") -> {
                         adjustVolume(AudioManager.ADJUST_LOWER)
                         speak("Volume decreased")
+                        statusMessage = "Volume down"
                     }
-                    command.contains("max") || command.contains("maximum") -> {
+                    input.contains("max") || input.contains("maximum") || input.contains("full") -> {
                         setMaxVolume()
                         speak("Volume set to maximum")
+                        statusMessage = "Volume max"
                     }
-                    command.contains("mute") || command.contains("silent") -> {
-                        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+                    input.contains("mute") || input.contains("silent") || input.contains("off") -> {
+                        muteVolume()
                         speak("Volume muted")
+                        statusMessage = "Muted"
                     }
                     else -> {
-                        val currentVolume = getCurrentVolumePercentage()
-                        speak("Volume is at $currentVolume percent")
-                        statusMessage = "Volume: $currentVolume%"
+                        val percentage = getCurrentVolumePercentage()
+                        speak("Volume is at $percentage percent")
+                        statusMessage = "Volume: $percentage%"
                     }
                 }
             }
         })
 
-        // WiFi Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("wifi") || command.contains("wi-fi")
-            override fun execute(command: String) {
+        // ===== WIFI COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("wifi", "wi-fi", "internet connection")
+        ) {
+            override fun execute(input: String) {
                 when {
-                    command.contains("on") || command.contains("enable") -> {
-                        speak("Opening WiFi settings. Please enable WiFi manually.")
+                    input.contains("on") || input.contains("enable") || input.contains("turn on") -> {
+                        speak("Opening WiFi settings to enable")
                         openWifiSettings()
+                        statusMessage = "WiFi settings opened"
                     }
-                    command.contains("off") || command.contains("disable") -> {
-                        speak("Opening WiFi settings. Please disable WiFi manually.")
+                    input.contains("off") || input.contains("disable") || input.contains("turn off") -> {
+                        speak("Opening WiFi settings to disable")
                         openWifiSettings()
+                        statusMessage = "WiFi settings opened"
                     }
                     else -> {
                         val status = if (wifiManager.isWifiEnabled) "enabled" else "disabled"
@@ -240,175 +310,189 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        // Bluetooth Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) = command.contains("bluetooth")
-            override fun execute(command: String) {
+        // ===== BLUETOOTH COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("bluetooth")
+        ) {
+            override fun execute(input: String) {
                 speak("Opening Bluetooth settings")
                 openBluetoothSettings()
-                statusMessage = "Opening Bluetooth settings"
+                statusMessage = "Bluetooth settings"
             }
         })
 
-        // Brightness Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("brightness") || command.contains("screen")
-            override fun execute(command: String) {
+        // ===== BRIGHTNESS COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("brightness", "screen brightness", "display")
+        ) {
+            override fun execute(input: String) {
                 speak("Opening display settings for brightness control")
                 openDisplaySettings()
-                statusMessage = "Opening brightness settings"
+                statusMessage = "Display settings"
             }
         })
 
-        // Phone Call Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("call") || command.contains("dial")
-            override fun execute(command: String) {
-                val contact = command.replace(Regex("(call|dial)"), "").trim()
-                if (contact.isNotEmpty()) {
-                    speak("Opening dialer for $contact")
-                    statusMessage = "Calling: $contact"
-                    openDialer(contact)
+        // ===== PHONE CALL COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("call", "dial", "phone")
+        ) {
+            override fun execute(input: String) {
+                val contact = input.replace(Regex("(call|dial|phone)"), "").trim()
+                if (contact.isNotEmpty() && contact.length > 2) {
+                    // Check if input contains a phone number
+                    val phoneNumber = extractPhoneNumber(contact)
+                    if (phoneNumber != null) {
+                        speak("Calling $phoneNumber")
+                        makeCall(phoneNumber)
+                        statusMessage = "Calling: $phoneNumber"
+                    } else {
+                        // Try to find contact by name
+                        speak("Calling $contact")
+                        val number = findContactNumber(contact)
+                        if (number != null) {
+                            makeCall(number)
+                            statusMessage = "Calling: $contact"
+                        } else {
+                            speak("Contact $contact not found. Opening dialer.")
+                            openDialer()
+                            statusMessage = "Contact not found"
+                        }
+                    }
                 } else {
-                    speak("Who would you like to call?")
+                    speak("Opening phone dialer")
+                    openDialer()
+                    statusMessage = "Dialer"
                 }
             }
         })
 
-        // Message Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("message") || command.contains("text") || command.contains("sms")
-            override fun execute(command: String) {
+        // ===== MESSAGE COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("message", "text", "sms")
+        ) {
+            override fun execute(input: String) {
                 when {
-                    command.contains("read") -> {
-                        speak("Opening messages to read")
-                        statusMessage = "Reading messages..."
-                    }
-                    command.contains("send") -> {
-                        speak("Opening messages to send")
-                        statusMessage = "Ready to send message"
-                    }
-                    else -> {
-                        speak("Opening messages")
-                        openMessaging()
-                    }
+                    input.contains("read") -> speak("Opening messages to read")
+                    input.contains("send") -> speak("Opening messages to send")
+                    else -> speak("Opening messages")
                 }
+                openMessaging()
+                statusMessage = "Messages opened"
             }
         })
 
-        // Camera Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("camera") || command.contains("photo") ||
-                        command.contains("picture") || command.contains("read this") ||
-                        command.contains("what is this") || command.contains("identify")
-            override fun execute(command: String) {
-                speak("Opening camera")
-                statusMessage = "Opening camera..."
+        // ===== CAMERA/VISION COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("camera", "photo", "picture", "read this", "what is this", "identify", "scan")
+        ) {
+            override fun execute(input: String) {
+                when {
+                    input.contains("read") || input.contains("scan") ->
+                        speak("Opening camera to read text")
+                    input.contains("what") || input.contains("identify") ->
+                        speak("Opening camera to identify objects")
+                    else ->
+                        speak("Opening camera")
+                }
                 openCamera()
+                statusMessage = "Camera opened"
             }
         })
 
-        // Navigation Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("navigate") || command.contains("directions") ||
-                        command.contains("where am i") || command.contains("location")
-            override fun execute(command: String) {
+        // ===== NAVIGATION COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("navigate", "directions", "where am i", "location", "maps")
+        ) {
+            override fun execute(input: String) {
                 when {
-                    command.contains("where am i") || command.contains("location") -> {
-                        speak("Opening location services")
-                        statusMessage = "Getting location..."
+                    input.contains("where am i") || input.contains("my location") -> {
+                        speak("Getting your current location")
+                        statusMessage = "Location services"
                     }
                     else -> {
-                        val destination = command.replace(Regex("(navigate|directions|to)"), "").trim()
-                        speak("Opening navigation for $destination")
-                        statusMessage = "Navigating to: $destination"
+                        speak("Opening navigation")
+                        statusMessage = "Navigation"
                     }
                 }
             }
         })
 
-        // App Opening Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("open") || command.contains("launch") || command.contains("start")
-            override fun execute(command: String) {
-                val appName = command.replace(Regex("(open|launch|start)"), "").trim()
-                if (appName.isNotEmpty()) {
-                    speak("Opening $appName")
-                    statusMessage = "Opening: $appName"
-                    openApp(appName)
-                } else {
-                    speak("Which app would you like to open?")
+        // ===== APP OPENING COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("open", "launch", "start")
+        ) {
+            override fun execute(input: String) {
+                val appName = input.replace(Regex("(open|launch|start)"), "").trim()
+
+                when {
+                    appName.contains("settings") || appName.contains("setting") -> {
+                        speak("Opening settings")
+                        openSettings()
+                        statusMessage = "Settings"
+                    }
+                    appName.contains("contact") -> {
+                        speak("Opening contacts")
+                        openContacts()
+                        statusMessage = "Contacts"
+                    }
+                    appName.isNotEmpty() && appName.length > 2 -> {
+                        speak("Opening $appName")
+                        statusMessage = "Opening: $appName"
+                    }
+                    else -> {
+                        speak("Which app would you like to open?")
+                    }
                 }
             }
         })
 
-        // Emergency Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("emergency") || command.contains("help") || command.contains("sos")
-            override fun execute(command: String) {
+        // ===== CALENDAR COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("calendar", "schedule", "appointment", "meeting", "event")
+        ) {
+            override fun execute(input: String) {
+                speak("Opening calendar")
+                openCalendar()
+                statusMessage = "Calendar"
+            }
+        })
+
+        // ===== ALARM COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("alarm", "wake me", "set alarm", "timer")
+        ) {
+            override fun execute(input: String) {
+                speak("Opening alarm settings")
+                openAlarmSettings()
+                statusMessage = "Alarms"
+            }
+        })
+
+        // ===== EMERGENCY COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("emergency", "help", "sos", "danger")
+        ) {
+            override fun execute(input: String) {
                 handleEmergency()
             }
         })
 
-        // Calendar Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("calendar") || command.contains("schedule") ||
-                        command.contains("appointment") || command.contains("meeting")
-            override fun execute(command: String) {
-                speak("Opening calendar")
-                statusMessage = "Opening calendar..."
-                openCalendar()
-            }
-        })
-
-        // Alarm Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("alarm") || command.contains("wake me")
-            override fun execute(command: String) {
-                speak("Opening alarm settings")
-                openAlarmSettings()
-                statusMessage = "Opening alarms"
-            }
-        })
-
-        // Flashlight Commands
-        commandHandlers.add(object : CommandHandler {
-            override fun canHandle(command: String) =
-                command.contains("flashlight") || command.contains("torch") || command.contains("light")
-            override fun execute(command: String) {
-                speak("Flashlight control")
-                statusMessage = "Flashlight toggled"
+        // ===== SYSTEM INFO COMMANDS =====
+        commandRegistry.register(object : Command(
+            keywords = listOf("repeat", "say again", "what")
+        ) {
+            override fun execute(input: String) {
+                if (lastCommand.isNotEmpty()) {
+                    speak("I heard: $lastCommand")
+                } else {
+                    speak("No previous command to repeat")
+                }
             }
         })
     }
 
-    private fun processCommand(command: String) {
-        val lowerCommand = command.lowercase().trim()
+    // ==================== SYSTEM METHODS ====================
 
-        val handler = commandHandlers.find { it.canHandle(lowerCommand) }
-
-        if (handler != null) {
-            handler.execute(lowerCommand)
-        } else {
-            speak("I heard: $command. But I don't understand that command yet.")
-            statusMessage = "Unknown command: \"$command\""
-        }
-
-        this@MainActivity.handler.postDelayed({
-            statusMessage = "Ready - Long press Volume Up to speak"
-        }, 3000)
-    }
-
-    // System Information Methods
     private fun getBatteryLevel(): Int {
         val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         return batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -430,13 +514,71 @@ class MainActivity : ComponentActivity() {
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxVolume, AudioManager.FLAG_SHOW_UI)
     }
 
+    private fun muteVolume() {
+        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+    }
+
     private fun getCurrentVolumePercentage(): Int {
         val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        return (currentVolume * 100 / maxVolume)
+        return if (maxVolume > 0) (currentVolume * 100 / maxVolume) else 0
     }
 
-    // Intent Launchers
+    // ==================== PHONE CALL HELPERS ====================
+
+    private fun extractPhoneNumber(input: String): String? {
+        // Remove common words and spaces
+        val cleaned = input.replace(Regex("[^0-9+]"), "")
+        // Check if it looks like a phone number (at least 7 digits)
+        return if (cleaned.length >= 7) cleaned else null
+    }
+
+    private fun findContactNumber(name: String): String? {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) {
+            return null
+        }
+
+        val cursor = contentResolver.query(
+            android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(
+                android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER,
+                android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+            ),
+            "${android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+            arrayOf("%$name%"),
+            null
+        )
+
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val numberIndex = it.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+                if (numberIndex >= 0) {
+                    return it.getString(numberIndex)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun makeCall(phoneNumber: String) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+            == PackageManager.PERMISSION_GRANTED) {
+            val intent = Intent(Intent.ACTION_CALL).apply {
+                data = "tel:$phoneNumber".toUri()
+            }
+            startActivity(intent)
+        } else {
+            // Fallback to dialer if permission not granted
+            val intent = Intent(Intent.ACTION_DIAL).apply {
+                data = "tel:$phoneNumber".toUri()
+            }
+            startActivity(intent)
+        }
+    }
+
+    // ==================== INTENT LAUNCHERS ====================
+
     private fun openWifiSettings() {
         startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
     }
@@ -449,10 +591,8 @@ class MainActivity : ComponentActivity() {
         startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS))
     }
 
-    private fun openDialer(contact: String) {
-        val intent = Intent(Intent.ACTION_DIAL).apply {
-            data = "tel:".toUri()
-        }
+    private fun openDialer() {
+        val intent = Intent(Intent.ACTION_DIAL)
         startActivity(intent)
     }
 
@@ -476,17 +616,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openAlarmSettings() {
-        startActivity(Intent(Settings.ACTION_SOUND_SETTINGS))
+        startActivity(Intent(android.provider.AlarmClock.ACTION_SET_ALARM))
     }
 
-    private fun openApp(appName: String) {
-        speak("App launcher feature coming soon")
+    private fun openSettings() {
+        startActivity(Intent(Settings.ACTION_SETTINGS))
+    }
+
+    private fun openContacts() {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            data = android.provider.ContactsContract.Contacts.CONTENT_URI
+        }
+        startActivity(intent)
     }
 
     private fun handleEmergency() {
         val emergencyNumber = prefs.getString("emergency_number", "911")
-        speak("Calling emergency contact at $emergencyNumber")
-        statusMessage = "Emergency call initiated"
+        speak("Calling emergency contact")
+        statusMessage = "Emergency"
 
         val intent = Intent(Intent.ACTION_DIAL).apply {
             data = "tel:$emergencyNumber".toUri()
@@ -494,7 +641,8 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 
-    // Volume Button Handling
+    // ==================== VOLUME BUTTON HANDLING ====================
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && event?.repeatCount == 0) {
             isVolumeButtonPressed = true
@@ -505,7 +653,7 @@ class MainActivity : ComponentActivity() {
                 if (isVolumeButtonPressed) {
                     startListening()
                 }
-            }, LONG_PRESS_THRESHOLD)
+            }, longPressThreshold)
 
             return true
         }
@@ -518,15 +666,13 @@ class MainActivity : ComponentActivity() {
             isVolumeButtonPressed = false
             handler.removeCallbacksAndMessages(null)
 
-            if (pressDuration >= LONG_PRESS_THRESHOLD && isListening) {
+            if (pressDuration >= longPressThreshold && isListening) {
                 stopListening()
-                statusMessage = "Processing command..."
+                statusMessage = "Processing..."
 
                 handler.postDelayed({
-                    capturedCommand?.let { processCommand(it) }
+                    capturedCommand?.let { commandRegistry.execute(it) }
                 }, 300)
-            } else {
-                statusMessage = "Ready - Long press Volume Up to speak"
             }
 
             return true
@@ -563,8 +709,11 @@ class MainActivity : ComponentActivity() {
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
+    // ==================== UI COMPOSITION ====================
+
     @Composable
     fun MainScreen() {
+        val scrollState = rememberScrollState()
         val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
         val scale by infiniteTransition.animateFloat(
             initialValue = 1f,
@@ -584,46 +733,48 @@ class MainActivity : ComponentActivity() {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .verticalScroll(scrollState)
                     .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Spacer(modifier = Modifier.height(40.dp))
+
+                // Logo/Title
                 Text(
                     text = "ZIRA",
-                    fontSize = 48.sp,
+                    fontSize = 56.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
                 Text(
-                    text = "Voice Assistant for Everyone",
+                    text = "Voice Assistant",
                     fontSize = 18.sp,
                     color = Color.Gray
                 )
 
                 Spacer(modifier = Modifier.height(48.dp))
 
+                // Microphone Indicator
                 Card(
                     shape = CircleShape,
                     colors = CardDefaults.cardColors(
                         containerColor = if (isListening) Color(0xFF2196F3) else Color(0xFF1A1A1A)
                     ),
                     elevation = CardDefaults.cardElevation(
-                        defaultElevation = if (isListening) 8.dp else 2.dp
+                        defaultElevation = if (isListening) 12.dp else 4.dp
                     ),
                     modifier = Modifier.scale(if (isListening) scale else 1f)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(120.dp)
-                            .padding(24.dp),
+                            .size(140.dp)
+                            .padding(28.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "🎤",
-                            fontSize = 64.sp,
+                            fontSize = 72.sp,
                             color = if (isListening) Color.White else Color.Gray
                         )
                     }
@@ -631,57 +782,105 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // Status Message
                 Text(
                     text = statusMessage,
-                    fontSize = 18.sp,
+                    fontSize = 20.sp,
+                    fontWeight = if (isListening) FontWeight.Bold else FontWeight.Normal,
                     color = if (isListening) Color(0xFF2196F3) else Color.White,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 24.dp)
                 )
 
                 if (lastCommand.isNotEmpty() && !isListening) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = lastCommand,
                         fontSize = 16.sp,
                         color = Color.Gray,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 24.dp)
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                     )
                 }
 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(40.dp))
 
+                // Instructions Card
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = Color(0xFF1A1A1A)
                     ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
                         Text(
-                            text = "Available Commands:",
-                            fontSize = 16.sp,
+                            text = "How to Use",
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF2196F3)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "• Time & Date • Battery Status\n" +
-                                    "• Volume Control • WiFi/Bluetooth\n" +
-                                    "• Phone Calls • Messages\n" +
-                                    "• Camera/Scanner • Navigation\n" +
-                                    "• Open Apps • Emergency Call",
-                            fontSize = 14.sp,
+                            text = "1. Long press Volume Up button\n" +
+                                    "2. Speak your command clearly\n" +
+                                    "3. Release button when finished",
+                            fontSize = 16.sp,
                             color = Color.Gray,
-                            lineHeight = 20.sp
+                            lineHeight = 24.sp
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Available Commands Card
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1A1A1A)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text(
+                            text = "Available Commands",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2196F3)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val commandGroups = listOf(
+                            "⏰ Time & Date" to "\"What time is it?\" \"What's the date?\"",
+                            "🔋 Battery" to "\"Battery level\" \"Am I charging?\"",
+                            "🔊 Volume" to "\"Volume up\" \"Volume down\" \"Mute\"",
+                            "📡 Connectivity" to "\"WiFi status\" \"Bluetooth settings\"",
+                            "📞 Communication" to "\"Call [name]\" \"Open messages\"",
+                            "📷 Camera" to "\"Open camera\" \"Read this text\"",
+                            "🗺️ Navigation" to "\"Where am I?\" \"Navigate to [place]\"",
+                            "📱 Apps" to "\"Open [app name]\" \"Launch contacts\"",
+                            "📅 Calendar" to "\"Open calendar\" \"My schedule\"",
+                            "⏰ Alarms" to "\"Set alarm\" \"Timer\"",
+                            "🆘 Emergency" to "\"Emergency\" \"Help\""
+                        )
+
+                        commandGroups.forEach { (category, examples) ->
+                            Text(
+                                text = category,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = examples,
+                                fontSize = 13.sp,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }
