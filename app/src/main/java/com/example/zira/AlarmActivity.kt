@@ -37,98 +37,6 @@ object Constants {
     const val EXTRA_COMMAND = "extra_command"
 }
 
-// Main Activity
-class MainActivity : ComponentActivity() {
-    private lateinit var tts: TextToSpeech
-    private val handler = Handler(Looper.getMainLooper())
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        initializeTTS()
-
-        setContent {
-            ZiraTheme {
-                MainScreen()
-            }
-        }
-    }
-
-    private fun initializeTTS() {
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts.language = Locale.US
-                speak("Zira app initialized")
-            }
-        }
-    }
-
-    @Composable
-    fun MainScreen() {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Zira",
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF2196F3),
-                modifier = Modifier.padding(bottom = 32.dp)
-            )
-
-            Button(
-                onClick = { navigateToAlarms("Set alarm") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-            ) {
-                Text("Alarms & Timers", fontSize = 18.sp, modifier = Modifier.padding(12.dp))
-            }
-
-            Button(
-                onClick = { navigateToAlarms("Timer started") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-            ) {
-                Text("Timer", fontSize = 18.sp, modifier = Modifier.padding(12.dp))
-            }
-
-            Button(
-                onClick = { navigateToAlarms("Weather check") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-            ) {
-                Text("Weather", fontSize = 18.sp, modifier = Modifier.padding(12.dp))
-            }
-        }
-    }
-
-    private fun navigateToAlarms(command: String) {
-        val intent = Intent(this, AlarmActivity::class.java).apply {
-            putExtra(Constants.EXTRA_COMMAND, command)
-        }
-        startActivity(intent)
-    }
-
-    private fun speak(text: String) {
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
-    }
-
-    override fun onDestroy() {
-        tts.shutdown()
-        super.onDestroy()
-    }
-}
 
 // Alarm Activity
 class AlarmActivity : ComponentActivity() {
@@ -485,10 +393,3 @@ class AlarmActivity : ComponentActivity() {
     }
 }
 
-// Alarm Receiver Broadcast
-class AlarmReceiver : android.content.BroadcastReceiver() {
-    override fun onReceive(context: Context?, intent: Intent?) {
-        val label = intent?.getStringExtra("alarm_label") ?: "Alarm"
-        // Handle alarm notification
-    }
-}
