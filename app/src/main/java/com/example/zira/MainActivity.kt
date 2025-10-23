@@ -617,6 +617,7 @@ class MainActivity : ComponentActivity() {
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
+<<<<<<< HEAD
     // ==================== UI COMPOSITION ====================
 
     @Composable
@@ -841,3 +842,12 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+=======
+    override fun onDestroy() {
+        tts.shutdown()
+        super.onDestroy()
+    }
+}
+
+
+>>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
