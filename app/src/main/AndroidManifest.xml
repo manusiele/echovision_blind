@@ -28,6 +28,13 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <!-- Add necessary permissions for WiFi functionality -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- ✅ FIXED #3: Accessibility (request at runtime) -->
 
@@ -62,7 +69,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
         <!-- 🔥 ONBOARDING FLOW (PAGES 2-6) -->
         <activity
             android:name=".OnboardingActivity"
@@ -71,11 +77,6 @@
 
         <activity
             android:name=".PermissionsActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Zira" />
-
-        <activity
-            android:name=".VoiceTrainingActivity"
             android:exported="false"
             android:theme="@style/Theme.Zira" />
 
@@ -94,10 +95,10 @@
             android:name=".MainActivity"
             android:exported="false"
             android:theme="@style/Theme.Zira" />
-
-
-
-
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Zira" />
 
     </application>
 

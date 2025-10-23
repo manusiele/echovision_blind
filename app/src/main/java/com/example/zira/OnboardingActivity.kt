@@ -1,12 +1,16 @@
 package com.example.zira
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -25,19 +30,32 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.geometry.Offset
-import android.content.Context
-import android.os.Build
-import androidx.annotation.RequiresApi
-import androidx.annotation.RequiresPermission
+import java.util.*
 
 class OnboardingActivity : ComponentActivity() {
+    private lateinit var tts: TextToSpeech
+
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            OnboardingScreen()
+
+        // Initialize TTS
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts.language = Locale.US
+            }
         }
+
+        setContent {
+            OnboardingScreen(tts)
+        }
+    }
+
+    override fun onDestroy() {
+        if (::tts.isInitialized) {
+            tts.shutdown()
+        }
+        super.onDestroy()
     }
 }
 
@@ -50,7 +68,7 @@ fun GradientButton(
     Button(
         onClick = onClick,
         modifier = modifier
-            .height(72.dp) // Larger for accessibility
+            .height(72.dp)
             .width(200.dp),
         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
         shape = CircleShape,
@@ -61,7 +79,7 @@ fun GradientButton(
                 .fillMaxSize()
                 .background(
                     brush = Brush.linearGradient(
-                        colors = listOf(Color(0xFF2196F3), Color(0xFF1976D2)), // ZIRA Blue
+                        colors = listOf(Color(0xFF2196F3), Color(0xFF1976D2)),
                         start = Offset(0f, 0f),
                         end = Offset(100f, 100f)
                     ),
@@ -81,19 +99,18 @@ fun GradientButton(
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun OnboardingScreen() {
+fun OnboardingScreen(tts: TextToSpeech? = null) {
     val context = LocalContext.current
 
-    // **START AUDIO FEEDBACK**
-    LaunchedEffect(Unit) @androidx.annotation.RequiresPermission(android.Manifest.permission.VIBRATE) {
-        speakWelcome(context)
+    LaunchedEffect(Unit) {
+        speakWelcome(context, tts)
         vibrateWelcome(context)
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black) // ZIRA Black background
+            .background(Color.Black)
     ) {
         Column(
             modifier = Modifier
@@ -101,7 +118,7 @@ fun OnboardingScreen() {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // **MAIN LOGO** (Your existing layout)
+            // Main Logo
             Image(
                 painter = painterResource(id = R.drawable.logo2),
                 contentDescription = "ZIRA Logo",
@@ -112,7 +129,7 @@ fun OnboardingScreen() {
                 contentScale = ContentScale.FillWidth
             )
 
-            // **APP NAME ROW**
+            // App Name Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -137,7 +154,7 @@ fun OnboardingScreen() {
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // **TAGLINE**
+            // Tagline
             Text(
                 text = "Smarter Assistance for a Better Tomorrow!",
                 color = Color.White,
@@ -146,7 +163,7 @@ fun OnboardingScreen() {
                 modifier = Modifier.padding(bottom = 20.dp)
             )
 
-            // **MAIN DESCRIPTION** (Updated for voice assistant)
+            // Main Description
             Text(
                 text = "Welcome! I'm your voice assistant for complete phone independence.\n\n" +
                         "Long press Volume Down (2 seconds) anytime to activate me. I'll help you:\n\n" +
@@ -161,11 +178,11 @@ fun OnboardingScreen() {
                 lineHeight = 22.sp
             )
 
-            // **GET STARTED BUTTON**
+            // Get Started Button
             GradientButton(
                 text = "START SETUP",
                 onClick = {
-                    speak("Starting setup...", context)
+                    speak("Starting setup", context, tts)
                     val intent = Intent(context, PermissionsActivity::class.java)
                     context.startActivity(intent)
                     (context as? ComponentActivity)?.finish()
@@ -173,7 +190,7 @@ fun OnboardingScreen() {
                 modifier = Modifier.padding(bottom = 32.dp)
             )
 
-            // **VOICE ACTIVATION HINT**
+            // Voice Activation Hint
             Text(
                 text = "Or say 'Start Setup' now",
                 color = Color(0xFFBBDEFB),
@@ -181,7 +198,7 @@ fun OnboardingScreen() {
                 modifier = Modifier
                     .padding(bottom = 150.dp)
                     .clickable {
-                        speak("Starting setup...", context)
+                        speak("Starting setup", context, tts)
                         val intent = Intent(context, PermissionsActivity::class.java)
                         context.startActivity(intent)
                         (context as? ComponentActivity)?.finish()
@@ -191,18 +208,30 @@ fun OnboardingScreen() {
     }
 }
 
-// **ACCESSIBILITY HELPERS**
-private fun speakWelcome(context: Context) {
-    // TODO: TTS.speak("Welcome to Zira, your personal voice assistant. I'll help you navigate your phone, read messages, identify objects, and much more. To begin setup, tap Get Started or say Start Setup.", ...)
+// Accessibility Helpers
+private fun speakWelcome(context: Context, tts: TextToSpeech?) {
+    val welcomeMessage = "Welcome to Zira, your personal voice assistant. " +
+            "I'll help you navigate your phone, read messages, identify objects, and much more. " +
+            "To begin setup, tap Start Setup or say Start Setup."
+
+    tts?.speak(welcomeMessage, TextToSpeech.QUEUE_FLUSH, null, null)
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-@RequiresPermission(Manifest.permission.VIBRATE)
 private fun vibrateWelcome(context: Context) {
-    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-    vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(100, 50, 100), -1))
+    try {
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        vibrator?.let {
+            if (it.hasVibrator()) {
+                val effect = VibrationEffect.createWaveform(longArrayOf(100, 50, 100), -1)
+                it.vibrate(effect)
+            }
+        }
+    } catch (e: Exception) {
+        // Handle vibration permission or availability issues silently
+    }
 }
 
-private fun speak(text: String, context: Context) {
-    // TODO: Implement TTS
+fun speak(text: String, context: Context, tts: TextToSpeech?) {
+    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
 }

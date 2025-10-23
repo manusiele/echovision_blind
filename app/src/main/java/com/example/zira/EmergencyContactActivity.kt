@@ -7,9 +7,9 @@ import android.os.Bundle
 import android.provider.ContactsContract
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,18 +20,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.zira.ui.theme.ZiraTheme
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 class EmergencyContactActivity : ComponentActivity() {
     private lateinit var tts: TextToSpeech
-    private var selectedContact by mutableStateOf("")
-    private var selectedNumber by mutableStateOf("")
+    private var selectedContactName = ""
+    private var selectedContactNumber = ""
 
     private val contactPicker = registerForActivityResult(
         ActivityResultContracts.PickContact()
@@ -42,19 +42,36 @@ class EmergencyContactActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) tts.language = java.util.Locale.US
-        }
+        initializeTTS()
 
         setContent {
             ZiraTheme {
-                EmergencyContactScreen()
+                EmergencyContactScreen(
+                    selectedContact = selectedContactName,
+                    selectedNumber = selectedContactNumber,
+                    onSelectContact = { contactPicker.launch(null) },
+                    onManualEntry = {
+                        speak("Manual entry coming soon. Please select from contacts.")
+                    }
+                )
             }
         }
 
+        setupBackPressHandler()
+    }
+
+    private fun initializeTTS() {
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts.language = Locale.US
+            }
+        }
+    }
+
+    private fun setupBackPressHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (selectedContact.isNotEmpty()) {
+                if (selectedContactName.isNotEmpty()) {
                     completeSetup()
                 } else {
                     speak("Please select an emergency contact first.")
@@ -64,7 +81,12 @@ class EmergencyContactActivity : ComponentActivity() {
     }
 
     @Composable
-    fun EmergencyContactScreen() {
+    fun EmergencyContactScreen(
+        selectedContact: String,
+        selectedNumber: String,
+        onSelectContact: () -> Unit,
+        onManualEntry: () -> Unit
+    ) {
         LaunchedEffect(Unit) {
             speak("Emergency contact setup. Who should I call in emergencies?")
             delay(1500)
@@ -138,11 +160,13 @@ class EmergencyContactActivity : ComponentActivity() {
                                 fontWeight = FontWeight.Bold,
                                 color = if (selectedContact.isEmpty()) Color.Gray else Color.White
                             )
-                            Text(
-                                text = selectedNumber,
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
+                            if (selectedNumber.isNotEmpty()) {
+                                Text(
+                                    text = selectedNumber,
+                                    fontSize = 14.sp,
+                                    color = Color.Gray
+                                )
+                            }
                         }
                     }
                 }
@@ -151,7 +175,7 @@ class EmergencyContactActivity : ComponentActivity() {
 
                 // Pick Contact Button
                 Button(
-                    onClick = { contactPicker.launch(null) },
+                    onClick = onSelectContact,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -167,13 +191,14 @@ class EmergencyContactActivity : ComponentActivity() {
 
                 // Manual Entry Button
                 OutlinedButton(
-                    onClick = {
-                        speak("Manual entry coming soon. Please select from contacts.")
-                    },
+                    onClick = onManualEntry,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.White
+                    )
                 ) {
                     Icon(Icons.Default.Phone, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -195,53 +220,93 @@ class EmergencyContactActivity : ComponentActivity() {
     }
 
     private fun processContactSelection(uri: Uri) {
-        val cursor = contentResolver.query(uri, null, null, null, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val nameColumn = it.getColumnIndexOrThrow(ContactsContract.Data.DISPLAY_NAME)
-                selectedContact = it.getString(nameColumn)
+        try {
+            val cursor = contentResolver.query(uri, null, null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val nameIndex = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                    if (nameIndex != -1) {
+                        selectedContactName = it.getString(nameIndex) ?: ""
+                    }
 
-                val contactIdColumn = it.getColumnIndexOrThrow(ContactsContract.Data.CONTACT_ID)
-                val contactId = it.getString(contactIdColumn)
-
-                val phoneCursor = contentResolver.query(
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                    null,
-                    "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
-                    arrayOf(contactId),
-                    null
-                )
-                phoneCursor?.use { phone ->
-                    if (phone.moveToFirst()) {
-                        val numberColumn = phone.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                        selectedNumber = phone.getString(numberColumn)
+                    val idIndex = it.getColumnIndex(ContactsContract.Contacts._ID)
+                    if (idIndex != -1) {
+                        val contactId = it.getString(idIndex)
+                        fetchPhoneNumber(contactId)
                     }
                 }
             }
+
+            if (selectedContactName.isNotEmpty()) {
+                speak("Selected: $selectedContactName")
+                // Trigger recomposition
+                setContent {
+                    ZiraTheme {
+                        EmergencyContactScreen(
+                            selectedContact = selectedContactName,
+                            selectedNumber = selectedContactNumber,
+                            onSelectContact = { contactPicker.launch(null) },
+                            onManualEntry = {
+                                speak("Manual entry coming soon. Please select from contacts.")
+                            }
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            speak("Error selecting contact. Please try again.")
+            e.printStackTrace()
         }
-        speak("Selected: $selectedContact")
+    }
+
+    private fun fetchPhoneNumber(contactId: String) {
+        try {
+            val phoneCursor = contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                null,
+                "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                arrayOf(contactId),
+                null
+            )
+            phoneCursor?.use { phone ->
+                if (phone.moveToFirst()) {
+                    val numberIndex = phone.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    if (numberIndex != -1) {
+                        selectedContactNumber = phone.getString(numberIndex) ?: ""
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun speak(text: String) {
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        if (::tts.isInitialized) {
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        }
     }
 
     private fun completeSetup() {
         val prefs = getSharedPreferences("ZiraPrefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString("emergency_contact", selectedContact)
-            .putString("emergency_number", selectedNumber)
-            .putBoolean("onboarding_completed", true)
-            .apply()
+        prefs.edit().apply {
+            putString("emergency_contact", selectedContactName)
+            putString("emergency_number", selectedContactNumber)
+            putBoolean("onboarding_completed", true)
+            apply()
+        }
 
         speak("Emergency contact saved! Moving to activation test.")
+
         val intent = Intent(this, ActivationTestActivity::class.java)
         startActivity(intent)
         finish()
     }
 
     override fun onDestroy() {
-        tts.shutdown()
+        if (::tts.isInitialized) {
+            tts.shutdown()
+        }
         super.onDestroy()
     }
 }

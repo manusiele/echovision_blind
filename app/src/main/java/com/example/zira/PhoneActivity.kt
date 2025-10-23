@@ -23,14 +23,18 @@ import java.util.*
 
 class PhoneActivity : ComponentActivity() {
     private lateinit var tts: TextToSpeech
-    private var voiceCommand by mutableStateOf("")
-    private var callStatus by mutableStateOf("Ready to call")
-    private var extractedNumber by mutableStateOf("")
+    private var voiceCommand = ""
+    private var extractedNumber = ""
+    private var initialCallStatus = ""
+
+    companion object {
+        const val EXTRA_COMMAND = "extra_command"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        voiceCommand = intent.getStringExtra(MainActivity.EXTRA_COMMAND) ?: ""
+        voiceCommand = intent.getStringExtra(EXTRA_COMMAND) ?: ""
         extractPhoneNumber(voiceCommand)
         initializeTTS()
 
@@ -45,9 +49,9 @@ class PhoneActivity : ComponentActivity() {
         val digits = command.filter { it.isDigit() }
         if (digits.length >= 7) {
             extractedNumber = digits
-            callStatus = "Number extracted: ${formatPhoneNumber(digits)}"
+            initialCallStatus = "Number extracted: ${formatPhoneNumber(digits)}"
         } else {
-            callStatus = "No valid number found in command"
+            initialCallStatus = "No valid number found in command"
         }
     }
 
@@ -63,7 +67,7 @@ class PhoneActivity : ComponentActivity() {
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts.language = Locale.US
-                tts.speak(callStatus, TextToSpeech.QUEUE_FLUSH, null, null)
+                tts.speak(initialCallStatus, TextToSpeech.QUEUE_FLUSH, null, null)
             }
         }
     }
@@ -77,6 +81,8 @@ class PhoneActivity : ComponentActivity() {
 
     @Composable
     fun PhoneScreen() {
+        var callStatus by remember { mutableStateOf(initialCallStatus) }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -184,7 +190,9 @@ class PhoneActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        tts.shutdown()
+        if (::tts.isInitialized) {
+            tts.shutdown()
+        }
         super.onDestroy()
     }
 }

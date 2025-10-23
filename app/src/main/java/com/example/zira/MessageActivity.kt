@@ -23,15 +23,19 @@ import java.util.*
 
 class MessageActivity : ComponentActivity() {
     private lateinit var tts: TextToSpeech
-    private var voiceCommand by mutableStateOf("")
-    private var messageStatus by mutableStateOf("Ready to send message")
-    private var extractedNumber by mutableStateOf("")
-    private var messageText by mutableStateOf("")
+    private var voiceCommand = ""
+    private var extractedNumber = ""
+    private var messageText = ""
+    private var initialMessageStatus = ""
+
+    companion object {
+        const val EXTRA_COMMAND = "extra_command"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        voiceCommand = intent.getStringExtra(MainActivity.EXTRA_COMMAND) ?: ""
+        voiceCommand = intent.getStringExtra(EXTRA_COMMAND) ?: ""
         parseMessageCommand(voiceCommand)
         initializeTTS()
 
@@ -48,7 +52,7 @@ class MessageActivity : ComponentActivity() {
             extractedNumber = digits
         }
         messageText = command
-        messageStatus = if (extractedNumber.isNotEmpty()) {
+        initialMessageStatus = if (extractedNumber.isNotEmpty()) {
             "Message ready to send to ${formatPhoneNumber(extractedNumber)}"
         } else {
             "No recipient found"
@@ -67,7 +71,7 @@ class MessageActivity : ComponentActivity() {
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts.language = Locale.US
-                tts.speak(messageStatus, TextToSpeech.QUEUE_FLUSH, null, null)
+                tts.speak(initialMessageStatus, TextToSpeech.QUEUE_FLUSH, null, null)
             }
         }
     }
@@ -81,6 +85,8 @@ class MessageActivity : ComponentActivity() {
 
     @Composable
     fun MessageScreen() {
+        var messageStatus by remember { mutableStateOf(initialMessageStatus) }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -188,7 +194,9 @@ class MessageActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        tts.shutdown()
+        if (::tts.isInitialized) {
+            tts.shutdown()
+        }
         super.onDestroy()
     }
 }

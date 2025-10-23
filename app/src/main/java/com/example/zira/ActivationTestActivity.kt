@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.zira.ui.theme.ZiraTheme
 import kotlinx.coroutines.delay
 import java.util.*
 
@@ -37,11 +35,11 @@ class ActivationTestActivity : ComponentActivity() {
     private lateinit var audioManager: AudioManager
     private var originalVolume = 0
 
-    // State management for key press
-    private var isLongPressing = mutableStateOf(false)
-    private var pressStartTime = mutableStateOf(0L)
-    private var progress = mutableStateOf(0f)
-    private var testComplete = mutableStateOf(false)
+    // State management for key press - use State objects
+    private val isLongPressing = mutableStateOf(false)
+    private val pressStartTime = mutableStateOf(0L)
+    private val progress = mutableStateOf(0f)
+    private val testComplete = mutableStateOf(false)
     private var hasSpokenOneSecond = false
     private var hasSpokenAlmost = false
 
@@ -56,7 +54,7 @@ class ActivationTestActivity : ComponentActivity() {
         originalVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
 
         setContent {
-            ZiraTheme {
+            MaterialTheme {
                 ActivationTestScreen()
             }
         }
@@ -126,18 +124,30 @@ class ActivationTestActivity : ComponentActivity() {
 
         speak("Setup complete! Zira is ready. Long press Volume Up to activate me anytime. Moving to the main screen in 5 seconds.")
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            startService(Intent(this, ListeningService::class.java))
-            val intent = Intent(this, MainActivity::class.java)
-            startActivity(intent)
-            finish()
+            // Start the listening service if it exists
+            try {
+                startService(Intent(this, Class.forName("com.example.zira.ListeningService")))
+            } catch (e: ClassNotFoundException) {
+                // Service doesn't exist yet
+            }
+
+            // Navigate to MainActivity if it exists
+            try {
+                val intent = Intent(this, Class.forName("com.example.zira.MainActivity"))
+                startActivity(intent)
+                finish()
+            } catch (e: ClassNotFoundException) {
+                // MainActivity doesn't exist yet, just finish
+                finish()
+            }
         }, 5000)
     }
 
     @Composable
     fun ActivationTestScreen() {
-        val isPressingState = isLongPressing.value
-        val progressState = progress.value
-        val testCompleteState = testComplete.value
+        val isPressingState by remember { isLongPressing }
+        val progressState by remember { progress }
+        val testCompleteState by remember { testComplete }
 
         LaunchedEffect(Unit) {
             speak("Welcome to the activation test, the final step of Zira setup. This app helps blind users with voice commands. On this page, you'll learn to activate Zira by long pressing the Volume Up button for 2 seconds. You'll hear a countdown, a beep, and feel a vibration when successful. The screen shows 'Step 5 of 5', 'Activation Test' in large white text, a Volume Up icon with 'HOLD 2s', and a progress bar that fills as you hold. Press and hold the Volume Up button on your phone's side now.")

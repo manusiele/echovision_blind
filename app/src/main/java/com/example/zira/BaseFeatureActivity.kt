@@ -21,10 +21,14 @@ abstract class BaseFeatureActivity : ComponentActivity() {
     protected lateinit var tts: TextToSpeech
     protected var command: String = ""
 
+    companion object {
+        const val EXTRA_COMMAND = "EXTRA_COMMAND"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        command = intent.getStringExtra(MainActivity.EXTRA_COMMAND) ?: ""
+        command = intent.getStringExtra(EXTRA_COMMAND) ?: ""
 
         initializeTTS()
 

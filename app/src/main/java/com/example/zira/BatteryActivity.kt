@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 class BatteryActivity : BaseFeatureActivity() {
 
@@ -37,15 +38,15 @@ class BatteryActivity : BaseFeatureActivity() {
 
     @Composable
     override fun FeatureContent() {
-        val batteryLevel = remember { mutableStateOf(getBatteryLevel()) }
-        val charging = remember { mutableStateOf(isCharging()) }
+        var batteryLevel by remember { mutableStateOf(getBatteryLevel()) }
+        var charging by remember { mutableStateOf(isCharging()) }
 
         LaunchedEffect(Unit) {
             // Update battery status periodically
             while (true) {
-                batteryLevel.value = getBatteryLevel()
-                charging.value = isCharging()
-                kotlinx.coroutines.delay(1000)
+                batteryLevel = getBatteryLevel()
+                charging = isCharging()
+                delay(1000)
             }
         }
 
@@ -66,12 +67,12 @@ class BatteryActivity : BaseFeatureActivity() {
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "${batteryLevel.value}%",
+                text = "$batteryLevel%",
                 fontSize = 72.sp,
                 fontWeight = FontWeight.Bold,
                 color = when {
-                    batteryLevel.value > 80 -> Color.Green
-                    batteryLevel.value > 20 -> Color.Yellow
+                    batteryLevel > 80 -> Color.Green
+                    batteryLevel > 20 -> Color.Yellow
                     else -> Color.Red
                 }
             )
@@ -79,13 +80,13 @@ class BatteryActivity : BaseFeatureActivity() {
             Spacer(modifier = Modifier.height(16.dp))
 
             LinearProgressIndicator(
-                progress = batteryLevel.value / 100f,
+                progress = { batteryLevel / 100f },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(12.dp),
                 color = when {
-                    batteryLevel.value > 80 -> Color.Green
-                    batteryLevel.value > 20 -> Color.Yellow
+                    batteryLevel > 80 -> Color.Green
+                    batteryLevel > 20 -> Color.Yellow
                     else -> Color.Red
                 },
                 trackColor = Color.Gray
@@ -94,7 +95,7 @@ class BatteryActivity : BaseFeatureActivity() {
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = if (charging.value) "⚡ Charging" else "🔋 Not Charging",
+                text = if (charging) "⚡ Charging" else "🔋 Not Charging",
                 fontSize = 20.sp,
                 color = Color.White
             )

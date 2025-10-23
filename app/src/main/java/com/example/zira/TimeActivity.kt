@@ -14,6 +14,10 @@ import java.util.*
 
 class TimeActivity : BaseFeatureActivity() {
 
+    companion object {
+        const val EXTRA_COMMAND = "extra_command"
+    }
+
     override fun onTTSReady() {
         val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
         speak("The time is $time")
@@ -21,6 +25,10 @@ class TimeActivity : BaseFeatureActivity() {
 
     @Composable
     override fun FeatureContent() {
+
+        // Access the voiceCommand from the activity's intent
+        val command = intent.getStringExtra(EXTRA_COMMAND) ?: ""
+
         val currentTime by remember {
             mutableStateOf(SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()))
         }
