@@ -22,14 +22,16 @@ import com.example.zira.ui.theme.ZiraTheme
 import java.util.*
 
 class MessageActivity : ComponentActivity() {
-    private lateinit var tts: TextToSpeech
+    private var tts: TextToSpeech? = null
     private var voiceCommand = ""
     private var extractedNumber = ""
-    private var messageText = ""
     private var initialMessageStatus = ""
 
     companion object {
         const val EXTRA_COMMAND = "extra_command"
+        private const val MIN_PHONE_DIGITS = 7
+        private const val PHONE_10_DIGIT = 10
+        private const val PHONE_11_DIGIT = 11
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,22 +49,23 @@ class MessageActivity : ComponentActivity() {
     }
 
     private fun parseMessageCommand(command: String) {
-        val digits = command.filter { it.isDigit() }
-        if (digits.length >= 7) {
-            extractedNumber = digits
-        }
-        messageText = command
+        // Extract continuous digit sequences
+        val digitSequences = command.split(Regex("\\D+")).filter { it.isNotEmpty() }
+
+        // Find the first sequence with at least MIN_PHONE_DIGITS
+        extractedNumber = digitSequences.firstOrNull { it.length >= MIN_PHONE_DIGITS } ?: ""
+
         initialMessageStatus = if (extractedNumber.isNotEmpty()) {
             "Message ready to send to ${formatPhoneNumber(extractedNumber)}"
         } else {
-            "No recipient found"
+            "No valid phone number found in command"
         }
     }
 
     private fun formatPhoneNumber(number: String): String {
-        return when {
-            number.length == 10 -> "(${number.substring(0, 3)}) ${number.substring(3, 6)}-${number.substring(6)}"
-            number.length == 11 -> "+${number[0]} (${number.substring(1, 4)}) ${number.substring(4, 7)}-${number.substring(7)}"
+        return when (number.length) {
+            PHONE_10_DIGIT -> "(${number.substring(0, 3)}) ${number.substring(3, 6)}-${number.substring(6)}"
+            PHONE_11_DIGIT -> "+${number[0]} (${number.substring(1, 4)}) ${number.substring(4, 7)}-${number.substring(7)}"
             else -> number
         }
     }
@@ -70,22 +73,32 @@ class MessageActivity : ComponentActivity() {
     private fun initializeTTS() {
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                tts.language = Locale.US
-                tts.speak(initialMessageStatus, TextToSpeech.QUEUE_FLUSH, null, null)
+                tts?.apply {
+                    language = Locale.US
+                    speak(initialMessageStatus, TextToSpeech.QUEUE_FLUSH, null, null)
+                }
             }
         }
     }
 
     private fun sendMessage() {
         if (extractedNumber.isNotEmpty()) {
-            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$extractedNumber"))
-            startActivity(intent)
+            try {
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = Uri.parse("smsto:$extractedNumber")
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                // Handle case where no SMS app is available
+                e.printStackTrace()
+            }
         }
     }
 
     @Composable
     fun MessageScreen() {
-        var messageStatus by remember { mutableStateOf(initialMessageStatus) }
+        val messageStatus by remember { mutableStateOf(initialMessageStatus) }
+        val hasValidNumber = remember { extractedNumber.isNotEmpty() }
 
         Box(
             modifier = Modifier
@@ -130,7 +143,7 @@ class MessageActivity : ComponentActivity() {
                             textAlign = TextAlign.Center
                         )
 
-                        if (extractedNumber.isNotEmpty()) {
+                        if (hasValidNumber) {
                             Spacer(modifier = Modifier.height(24.dp))
 
                             Text(
@@ -162,7 +175,7 @@ class MessageActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                if (extractedNumber.isNotEmpty()) {
+                if (hasValidNumber) {
                     Button(
                         onClick = { sendMessage() },
                         colors = ButtonDefaults.buttonColors(
@@ -194,9 +207,8 @@ class MessageActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (::tts.isInitialized) {
-            tts.shutdown()
-        }
+        tts?.shutdown()
+        tts = null
         super.onDestroy()
     }
 }

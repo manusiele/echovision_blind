@@ -70,18 +70,46 @@ class PermissionsActivity : ComponentActivity() {
 
     private fun requestAllPermissions() {
         val permissions = mutableListOf(
+            // Audio & Camera
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.CAMERA,
+
+            // Contacts & Phone
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.CALL_PHONE,
+
+            // SMS
             Manifest.permission.READ_SMS,
             Manifest.permission.SEND_SMS,
+
+            // Calendar
             Manifest.permission.READ_CALENDAR,
-            Manifest.permission.ACCESS_FINE_LOCATION
+
+            // Location
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
 
+        // Android 13+ (API 33+) - Notifications
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+        }
+
+        // Storage permissions (for older Android versions)
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+        // Bluetooth permissions for Android 12+ (API 31+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+            permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+        } else {
+            // Older Bluetooth permissions for Android 11 and below
+            permissions.add(Manifest.permission.BLUETOOTH)
+            permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
         }
 
         speak("Requesting permissions. Please allow access to help you better.")
@@ -215,6 +243,18 @@ fun PermissionsScreen(
                 icon = Icons.Default.Notifications,
                 title = "Notifications",
                 description = "To alert you about important events and messages"
+            )
+
+            PermissionItem(
+                icon = Icons.Default.Star,
+                title = "Bluetooth",
+                description = "To connect with nearby devices and accessories"
+            )
+
+            PermissionItem(
+                icon = Icons.Default.Build,
+                title = "Storage",
+                description = "To access and manage your files and media"
             )
 
             Spacer(modifier = Modifier.height(40.dp))

@@ -6,15 +6,10 @@ import android.app.PendingIntent
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-<<<<<<< HEAD
-import android.database.sqlite.SQLiteDatabase
-import android.database.sqlite.SQLiteOpenHelper
-=======
 import android.content.pm.PackageManager
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.os.Build
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -28,10 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-<<<<<<< HEAD
-=======
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -132,23 +124,6 @@ class AlarmDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
             "$COLUMN_CREATED_AT DESC"
         )
 
-<<<<<<< HEAD
-        with(cursor) {
-            while (moveToNext()) {
-                val alarm = Alarm(
-                    id = getInt(getColumnIndexOrThrow(COLUMN_ID)),
-                    time = getString(getColumnIndexOrThrow(COLUMN_TIME)),
-                    label = getString(getColumnIndexOrThrow(COLUMN_LABEL)),
-                    enabled = getInt(getColumnIndexOrThrow(COLUMN_ENABLED)) == 1,
-                    repeatDays = getString(getColumnIndexOrThrow(COLUMN_REPEAT_DAYS)),
-                    vibrate = getInt(getColumnIndexOrThrow(COLUMN_VIBRATE)) == 1,
-                    ringtoneUri = getString(getColumnIndexOrThrow(COLUMN_RINGTONE_URI)) ?: "",
-                    volume = getInt(getColumnIndexOrThrow(COLUMN_VOLUME)),
-                    snoozeEnabled = getInt(getColumnIndexOrThrow(COLUMN_SNOOZE_ENABLED)) == 1,
-                    snoozeDuration = getInt(getColumnIndexOrThrow(COLUMN_SNOOZE_DURATION)),
-                    createdAt = getLong(getColumnIndexOrThrow(COLUMN_CREATED_AT)),
-                    lastTriggered = getLong(getColumnIndexOrThrow(COLUMN_LAST_TRIGGERED))
-=======
         cursor.use {
             while (it.moveToNext()) {
                 val alarm = Alarm(
@@ -164,40 +139,12 @@ class AlarmDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE
                     snoozeDuration = it.getInt(it.getColumnIndexOrThrow(COLUMN_SNOOZE_DURATION)),
                     createdAt = it.getLong(it.getColumnIndexOrThrow(COLUMN_CREATED_AT)),
                     lastTriggered = it.getLong(it.getColumnIndexOrThrow(COLUMN_LAST_TRIGGERED))
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
                 )
                 alarms.add(alarm)
             }
         }
-<<<<<<< HEAD
-        cursor.close()
         return alarms
     }
-
-    // Update alarm
-    fun updateAlarm(alarm: Alarm): Int {
-        val db = writableDatabase
-        val values = ContentValues().apply {
-            put(COLUMN_TIME, alarm.time)
-            put(COLUMN_LABEL, alarm.label)
-            put(COLUMN_ENABLED, if (alarm.enabled) 1 else 0)
-            put(COLUMN_REPEAT_DAYS, alarm.repeatDays)
-            put(COLUMN_VIBRATE, if (alarm.vibrate) 1 else 0)
-            put(COLUMN_RINGTONE_URI, alarm.ringtoneUri)
-            put(COLUMN_VOLUME, alarm.volume)
-            put(COLUMN_SNOOZE_ENABLED, if (alarm.snoozeEnabled) 1 else 0)
-            put(COLUMN_SNOOZE_DURATION, alarm.snoozeDuration)
-            put(COLUMN_LAST_TRIGGERED, alarm.lastTriggered)
-        }
-
-        return db.update(TABLE_ALARMS, values, "$COLUMN_ID = ?", arrayOf(alarm.id.toString()))
-    }
-=======
-        return alarms
-    }
-
-    // Update alarm - removed unused function, use toggleAlarm or specific updates instead
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
 
     // Delete alarm
     fun deleteAlarm(alarmId: Int): Int {
@@ -236,14 +183,10 @@ class AlarmActivity : ComponentActivity() {
     private lateinit var command: String
     private lateinit var tts: TextToSpeech
     private lateinit var dbHelper: AlarmDatabaseHelper
-<<<<<<< HEAD
-    private val handler = Handler(Looper.getMainLooper())
-=======
 
     companion object {
         private const val PERMISSION_REQUEST_CODE = 100
     }
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -251,12 +194,9 @@ class AlarmActivity : ComponentActivity() {
 
         // Initialize database
         dbHelper = AlarmDatabaseHelper(this)
-<<<<<<< HEAD
-=======
 
         // Check for required permissions
         checkAndRequestPermissions()
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
 
         initializeTTS()
 
@@ -317,11 +257,7 @@ class AlarmActivity : ComponentActivity() {
                     speak("Closing alarms")
                     finish()
                 }) {
-<<<<<<< HEAD
-                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
-=======
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
                 }
                 Text(
                     text = "Alarms & Timers",
@@ -604,11 +540,7 @@ class AlarmActivity : ComponentActivity() {
             confirmButton = {
                 Button(
                     onClick = {
-<<<<<<< HEAD
-                        val timeStr = String.format("%02d:%02d", selectedHour, selectedMinute)
-=======
                         val timeStr = String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute)
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
                         val label = alarmLabel.ifEmpty { "Alarm" }
                         onAddAlarm(timeStr, label, repeatType)
                     },
@@ -677,11 +609,7 @@ class AlarmActivity : ComponentActivity() {
                 Icon(Icons.Filled.KeyboardArrowUp, "Increase", tint = Color.White, modifier = Modifier.size(32.dp))
             }
             Text(
-<<<<<<< HEAD
-                text = String.format("%02d", value),
-=======
                 text = String.format(Locale.US, "%02d", value),
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
                 fontSize = 28.sp,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
@@ -728,23 +656,6 @@ class AlarmActivity : ComponentActivity() {
             }
 
             if (alarm.enabled) {
-<<<<<<< HEAD
-                if (alarm.repeatDays == "EVERYDAY") {
-                    // Repeating alarm
-                    alarmManager.setRepeating(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        AlarmManager.INTERVAL_DAY,
-                        pendingIntent
-                    )
-                } else {
-                    // One-time alarm
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        pendingIntent
-                    )
-=======
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     if (alarmManager.canScheduleExactAlarms()) {
                         if (alarm.repeatDays == "EVERYDAY") {
@@ -777,7 +688,6 @@ class AlarmActivity : ComponentActivity() {
                             pendingIntent
                         )
                     }
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
                 }
             }
         } catch (exception: Exception) {
@@ -797,32 +707,6 @@ class AlarmActivity : ComponentActivity() {
             )
             alarmManager.cancel(pendingIntent)
         } catch (exception: Exception) {
-            // Silent fail - intentionally unused parameter
-        }
-    }
-
-    private fun getRepeatText(repeatDays: String): String {
-        return when (repeatDays) {
-            "EVERYDAY" -> "Everyday"
-            "MON,TUE,WED,THU,FRI" -> "Weekdays"
-            "SAT,SUN" -> "Weekends"
-            "NONE" -> ""
-            else -> "Custom"
-        }
-    }
-
-    private fun cancelAlarm(alarmId: Int) {
-        try {
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(this, AlarmReceiver::class.java)
-            val pendingIntent = PendingIntent.getBroadcast(
-                this,
-                alarmId,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            alarmManager.cancel(pendingIntent)
-        } catch (e: Exception) {
             // Silent fail
         }
     }
@@ -872,11 +756,7 @@ class AlarmReceiver : android.content.BroadcastReceiver() {
 class AlarmRingingActivity : ComponentActivity() {
     private lateinit var tts: TextToSpeech
     private lateinit var ringtone: android.media.Ringtone
-<<<<<<< HEAD
-    private lateinit var vibrator: android.os.Vibrator
-=======
     private var vibrator: Vibrator? = null
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
     private var alarmLabel = ""
     private var alarmTime = ""
 
@@ -888,11 +768,7 @@ class AlarmRingingActivity : ComponentActivity() {
         alarmTime = intent.getStringExtra("alarm_time") ?: ""
 
         // Turn screen on and show over lock screen
-<<<<<<< HEAD
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-=======
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
             setShowWhenLocked(true)
             setTurnScreenOn(true)
         } else {
@@ -936,50 +812,25 @@ class AlarmRingingActivity : ComponentActivity() {
             val alarmUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
             ringtone = android.media.RingtoneManager.getRingtone(this, alarmUri)
             ringtone.play()
-<<<<<<< HEAD
-        } catch (e: Exception) {
-=======
         } catch (exception: Exception) {
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
             // If alarm ringtone fails, try notification sound
             try {
                 val notificationUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
                 ringtone = android.media.RingtoneManager.getRingtone(this, notificationUri)
                 ringtone.play()
-<<<<<<< HEAD
-            } catch (e2: Exception) {
-                // Silent fail
-=======
             } catch (exception2: Exception) {
-                // Silent fail - intentionally unused parameter
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
+                // Silent fail
             }
         }
     }
 
     private fun startVibration() {
         try {
-<<<<<<< HEAD
-            vibrator = getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
-=======
             vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
 
             // Vibration pattern: wait 0ms, vibrate 1000ms, wait 1000ms, repeat
             val pattern = longArrayOf(0, 1000, 1000)
 
-<<<<<<< HEAD
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                vibrator.vibrate(
-                    android.os.VibrationEffect.createWaveform(pattern, 0)
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(pattern, 0)
-            }
-        } catch (e: Exception) {
-            // Silent fail if vibration not supported
-=======
             vibrator?.let {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     it.vibrate(
@@ -991,8 +842,7 @@ class AlarmRingingActivity : ComponentActivity() {
                 }
             }
         } catch (exception: Exception) {
-            // Silent fail if vibration not supported - intentionally unused parameter
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
+            // Silent fail if vibration not supported
         }
     }
 
@@ -1031,11 +881,7 @@ class AlarmRingingActivity : ComponentActivity() {
                     text = alarmLabel,
                     fontSize = 32.sp,
                     color = Color.White,
-<<<<<<< HEAD
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-=======
                     textAlign = TextAlign.Center
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
                 )
 
                 Spacer(modifier = Modifier.height(64.dp))
@@ -1093,11 +939,7 @@ class AlarmRingingActivity : ComponentActivity() {
         // Schedule alarm again after 5 minutes
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(this, AlarmReceiver::class.java).apply {
-<<<<<<< HEAD
-            putExtra("alarm_id", intent.getIntExtra("alarm_id", -1))
-=======
             putExtra("alarm_id", getIntent().getIntExtra("alarm_id", -1))
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
             putExtra("alarm_label", alarmLabel)
             putExtra("alarm_time", alarmTime)
         }
@@ -1110,13 +952,6 @@ class AlarmRingingActivity : ComponentActivity() {
         )
 
         val snoozeTime = System.currentTimeMillis() + (5 * 60 * 1000) // 5 minutes
-<<<<<<< HEAD
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            snoozeTime,
-            pendingIntent
-        )
-=======
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (alarmManager.canScheduleExactAlarms()) {
@@ -1133,7 +968,6 @@ class AlarmRingingActivity : ComponentActivity() {
                 pendingIntent
             )
         }
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
 
         stopAlarm()
         finish()
@@ -1144,27 +978,14 @@ class AlarmRingingActivity : ComponentActivity() {
             if (::ringtone.isInitialized && ringtone.isPlaying) {
                 ringtone.stop()
             }
-<<<<<<< HEAD
-        } catch (e: Exception) {
-            // Silent fail
-        }
-
-        try {
-            if (::vibrator.isInitialized) {
-                vibrator.cancel()
-            }
-        } catch (e: Exception) {
-            // Silent fail
-=======
         } catch (exception: Exception) {
-            // Silent fail - intentionally unused parameter
+            // Silent fail
         }
 
         try {
             vibrator?.cancel()
         } catch (exception: Exception) {
-            // Silent fail - intentionally unused parameter
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
+            // Silent fail
         }
     }
 
@@ -1181,9 +1002,4 @@ class AlarmRingingActivity : ComponentActivity() {
         }
         super.onDestroy()
     }
-<<<<<<< HEAD
-
-
-=======
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
 }

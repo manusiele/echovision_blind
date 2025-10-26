@@ -46,8 +46,8 @@ import java.util.*
 class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_COMMAND = "extra_command"
-
     }
+
     // Core Components
     private lateinit var tts: TextToSpeech
     private lateinit var speechRecognizer: SpeechRecognizer
@@ -70,8 +70,6 @@ class MainActivity : ComponentActivity() {
     // Command System
     private val commandRegistry = CommandRegistry()
 
-
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -90,6 +88,8 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // ==================== INITIALIZATION ====================
 
     private fun checkPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -163,6 +163,8 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    // ==================== COMMAND SYSTEM ====================
+
     inner class CommandRegistry {
         private val commands = mutableListOf<Command>()
 
@@ -203,7 +205,7 @@ class MainActivity : ComponentActivity() {
 
         // ===== NAVIGATION TO ACTIVITIES =====
         commandRegistry.register(object : Command(
-            keywords = listOf("alarm", "wake me", "set alarm"),
+            keywords = listOf("alarm", "wake me", "set alarm", "timer"),
             description = "Open alarms"
         ) {
             override fun execute(input: String) {
@@ -212,15 +214,15 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-//        commandRegistry.register(object : Command(
-//            keywords = listOf("contact", "contacts", "phonebook"),
-//            description = "Open contacts"
-//        ) {
-//            override fun execute(input: String) {
-//                speak("Opening contacts")
-//                navigateToActivity(ContactsActivity::class.java, input)
-//            }
-//        })
+        commandRegistry.register(object : Command(
+            keywords = listOf("contact", "contacts", "phonebook"),
+            description = "Open contacts"
+        ) {
+            override fun execute(input: String) {
+                speak("Opening contacts")
+                navigateToActivity(ContactsActivity::class.java, input)
+            }
+        })
 
         // ===== TIME & DATE COMMANDS =====
         commandRegistry.register(object : Command(
@@ -434,11 +436,11 @@ class MainActivity : ComponentActivity() {
                         openSettings()
                         statusMessage = "Settings"
                     }
-//                    appName.contains("contact") -> {
-//                        speak("Opening contacts")
-//                        navigateToActivity(ContactsActivity::class.java, input)
-//                        statusMessage = "Contacts"
-//                    }
+                    appName.contains("contact") -> {
+                        speak("Opening contacts")
+                        navigateToActivity(ContactsActivity::class.java, input)
+                        statusMessage = "Contacts"
+                    }
                     appName.contains("alarm") -> {
                         speak("Opening alarms")
                         navigateToActivity(AlarmActivity::class.java, input)
@@ -617,7 +619,6 @@ class MainActivity : ComponentActivity() {
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-<<<<<<< HEAD
     // ==================== UI COMPOSITION ====================
 
     @Composable
@@ -769,19 +770,19 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-//                Button(
-//                    onClick = {
-//                        speak("Opening contacts")
-//                        navigateToActivity(ContactsActivity::class.java, "Open contacts")
-//                    },
-//                    modifier = Modifier
-//                        .fillMaxWidth()
-//                        .height(60.dp),
-//                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
-//                    shape = RoundedCornerShape(12.dp)
-//                ) {
-//                    Text("👤  Contacts", fontSize = 18.sp)
-//                }
+                Button(
+                    onClick = {
+                        speak("Opening contacts")
+                        navigateToActivity(ContactsActivity::class.java, "Open contacts")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("👤  Contacts", fontSize = 18.sp)
+                }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -842,12 +843,3 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
-=======
-    override fun onDestroy() {
-        tts.shutdown()
-        super.onDestroy()
-    }
-}
-
-
->>>>>>> 8e25acfe0f6166e1ef168113bff0031b676b4e3a
