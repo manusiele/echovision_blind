@@ -10,14 +10,20 @@ import android.graphics.ImageFormat
 import android.hardware.camera2.*
 import android.media.Image
 import android.media.ImageReader
+import android.net.Uri
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.speech.tts.TextToSpeech
+import android.util.Base64
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,11 +44,33 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.zira.ui.theme.ZiraTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.*
 
 class CameraActivity : ComponentActivity() {
     private lateinit var command: String
     private lateinit var tts: TextToSpeech
+
+    private val cameraLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val imageUri = result.data?.data
+            if (imageUri != null) {
+                speak("Image captured. Describing surroundings...")
+                describeImageWithGemini(imageUri)
+            } else {
+                speak("Could not capture image.")
+            }
+        } else {
+            speak("Image capture cancelled.")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -193,7 +221,8 @@ class CameraActivity : ComponentActivity() {
             CameraOption("📖 Read Text", "Scan and read text", "text"),
             CameraOption("🔍 Identify Object", "Identify what's in frame", "identify"),
             CameraOption("🎭 Face Detection", "Detect faces", "face"),
-            CameraOption("📊 QR Code", "Scan QR code", "qr")
+            CameraOption("📊 QR Code", "Scan QR code", "qr"),
+            CameraOption("🌍 Describe Surroundings", "Describe the environment using AI", "describe_surroundings")
         )
     }
 
@@ -229,11 +258,33 @@ class CameraActivity : ComponentActivity() {
             "qr" -> {
                 speak("QR code scanning requires barcode scanner library")
             }
+            "describe_surroundings" -> {
+                try {
+                    val cameraIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+                    cameraLauncher.launch(cameraIntent)
+                    speak("Opening camera to describe surroundings. Please take a picture.")
+                } catch (e: Exception) {
+                    speak("Camera app not available for describing surroundings.")
+                }
+            }
         }
     }
 
     private fun speak(text: String) {
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+    }
+
+    private fun isOnline(): Boolean {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+        if (capabilities != null) {
+            when {
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> return true
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> return true
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> return true
+            }
+        }
+        return false
     }
 
     data class CameraOption(
@@ -253,5 +304,64 @@ class CameraActivity : ComponentActivity() {
     override fun onDestroy() {
         tts.shutdown()
         super.onDestroy()
+    }
+
+    private fun describeImageWithGemini(imageUri: Uri) {
+        if (!isOnline()) {
+            speak("You are offline. Please connect to the internet to use this feature.")
+            return
+        }
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
+                val byteArrayOutputStream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
+                val byteArray = byteArrayOutputStream.toByteArray()
+                val base64Image = Base64.encodeToString(byteArray, Base64.DEFAULT)
+
+                val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${BuildConfig.GEMINI_API_KEY}")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+
+                val jsonInputString = """
+                    {
+                        "contents": [
+                            {
+                                "parts": [
+                                    {"text": "Describe this image."},
+                                    {"inlineData": {"mimeType": "image/jpeg", "data": "$base64Image"}}
+                                ]
+                            }
+                        ]
+                    }
+                """.trimIndent()
+
+                connection.outputStream.use { os ->
+                    val input = jsonInputString.toByteArray(Charsets.UTF_8)
+                    os.write(input, 0, input.size)
+                }
+
+                val response = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val jsonResponse = JSONObject(response)
+                val description = jsonResponse.getJSONArray("candidates")
+                    .getJSONObject(0)
+                    .getJSONObject("content")
+                    .getJSONArray("parts")
+                    .getJSONObject(0)
+                    .getString("text")
+
+                withContext(Dispatchers.Main) {
+                    speak(description)
+                }
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    speak("Error describing surroundings: ${e.message}")
+                }
+                Log.e("CameraActivity", "Error describing surroundings", e)
+            }
+        }
     }
 }

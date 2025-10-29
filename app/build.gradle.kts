@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -12,6 +15,19 @@ android {
         applicationId = "com.example.zira"
         minSdk = 24
         targetSdk = 36
+
+        // Load API key from local.properties
+        val properties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { properties.load(it) }
+        }
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${properties.getProperty("GEMINI_API_KEY", "")}\""
+        )
+
         versionCode = 1
         versionName = "1.0"
 
@@ -27,15 +43,19 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }
+
     buildFeatures {
         compose = true
+        buildConfig = true  // Required for BuildConfig.GEMINI_API_KEY
     }
 }
 
@@ -70,7 +90,8 @@ dependencies {
     implementation("com.airbnb.android:lottie:6.6.10")
     implementation("com.airbnb.android:lottie-compose:6.6.10")
 
-
+    // Gemini AI
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // Testing
     testImplementation(libs.junit)
@@ -80,6 +101,4 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-
-
 }

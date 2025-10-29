@@ -192,17 +192,45 @@ class ScreenReaderService : AccessibilityService(), TextToSpeech.OnInitListener 
         return null
     }
 
-    private fun findFirstClickableChild(rootNode: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        if (rootNode.isClickable && rootNode.childCount == 0) {
-            return rootNode
+    private fun findFirstClickableChild(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        // Check if the current node is clickable
+        if (node.isClickable) {
+            return node
         }
-        for (i in 0 until rootNode.childCount) {
-            val child = rootNode.getChild(i) ?: continue
-            val clickableChild = findFirstClickableChild(child)
-            if (clickableChild != null) {
-                return clickableChild
+
+        // Recursively check children
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val clickableChild = findFirstClickableChild(child)
+                if (clickableChild != null) {
+                    return clickableChild
+                }
             }
         }
+
+        return null
+    }
+
+    private fun findFirstClickableChildOfScrollable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.isScrollable) {
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                if (child != null && child.isClickable) {
+                    return child
+                }
+            }
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val clickableChild = findFirstClickableChildOfScrollable(child)
+                if (clickableChild != null) {
+                    return clickableChild
+                }
+            }
+        }
+        Log.d("ScreenReaderService", "No clickable item found in scrollable list.")
         return null
     }
 

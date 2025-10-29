@@ -33,7 +33,8 @@ class ListeningService : Service() {
             if (status == TextToSpeech.SUCCESS) {
                 val result = tts.setLanguage(Locale.US)
                 if (result == TextToSpeech.LANG_MISSING_DATA ||
-                    result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    result == TextToSpeech.LANG_NOT_SUPPORTED
+                ) {
                     Log.e("ListeningService", "TTS language not supported")
                 } else {
                     ttsInitialized = true
@@ -81,11 +82,13 @@ class ListeningService : Service() {
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
                         // Do not restart listening automatically
                     }
+
                     SpeechRecognizer.ERROR_CLIENT,
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
                         Log.e("ListeningService", "Critical error, stopping service")
                         stopSelf()
                     }
+
                     else -> {
                         speak("Error listening. Retrying...")
                         // Do not restart listening automatically
@@ -126,17 +129,21 @@ class ListeningService : Service() {
                 speak("Calling Mom...")
                 // TODO: Implement call functionality
             }
+
             lowercaseCommand.contains("open messages") -> {
                 speak("Opening messages...")
                 // TODO: Implement open messages functionality
             }
+
             lowercaseCommand.contains("emergency") -> {
                 speak("Initiating emergency call...")
                 // TODO: Implement emergency call
             }
+
             lowercaseCommand.contains("help") -> {
                 speak("Available commands: Call Mom, Open Messages, Emergency")
             }
+
             else -> {
                 speak("Command not recognized. Say 'help' for available commands.")
             }
@@ -230,3 +237,4 @@ class ListeningService : Service() {
             Log.d("ListeningService", "Stopped listening")
         }
     }
+}

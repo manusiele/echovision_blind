@@ -48,6 +48,8 @@
 
     <!-- ✅ FIXED #3: Accessibility (request at runtime) -->
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
     <queries>
         <intent>
@@ -124,7 +126,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                androidsrc="@xml/screen_reader_service_config" />
+                android:resource="@xml/screen_reader_service_config" />
         </service>
     </application>
 
