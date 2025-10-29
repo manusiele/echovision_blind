@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -62,7 +63,8 @@ class PermissionsActivity : ComponentActivity() {
             ZiraTheme {
                 PermissionsScreen(
                     onRequestPermissions = { requestAllPermissions() },
-                    onSkip = { navigateToNext() }
+                    onSkip = { navigateToNext() },
+                    onEnableScreenReader = { openAccessibilitySettings() }
                 )
             }
         }
@@ -131,6 +133,11 @@ class PermissionsActivity : ComponentActivity() {
         finish()
     }
 
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        startActivity(intent)
+    }
+
     override fun onDestroy() {
         if (::tts.isInitialized) {
             tts.stop()
@@ -143,7 +150,8 @@ class PermissionsActivity : ComponentActivity() {
 @Composable
 fun PermissionsScreen(
     onRequestPermissions: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onEnableScreenReader: () -> Unit
 ) {
     val scrollState = rememberScrollState()
 
@@ -257,7 +265,38 @@ fun PermissionsScreen(
                 description = "To access and manage your files and media"
             )
 
+            PermissionItem(
+                icon = Icons.Filled.Accessibility,
+                title = "Screen Reader",
+                description = "To read the screen content and provide voice feedback"
+            )
+
             Spacer(modifier = Modifier.height(40.dp))
+
+            Button(
+                onClick = onEnableScreenReader,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Accessibility,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Enable Screen Reader",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = onRequestPermissions,

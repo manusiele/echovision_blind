@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Zira</string>
+    <string name="accessibility_service_description">Zira screen reader</string>
 </resources>

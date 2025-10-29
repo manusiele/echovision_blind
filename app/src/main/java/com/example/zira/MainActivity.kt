@@ -381,6 +381,55 @@ class MainActivity : ComponentActivity() {
             }
         })
 
+        commandRegistry.register(object : Command(
+            keywords = listOf("read the most recent message", "read last message"),
+            description = "Read the last message in the current chat"
+        ) {
+            override fun execute(input: String) {
+                speak("Reading the last message")
+                readLastMessage()
+                statusMessage = "Reading last message"
+            }
+        })
+
+        commandRegistry.register(object : Command(
+            keywords = listOf("respond", "reply"),
+            description = "Respond to the current chat"
+        ) {
+            override fun execute(input: String) {
+                val message = input.replace(Regex("(respond|reply)"), "").trim()
+                if (message.isNotEmpty()) {
+                    speak("Sending response: $message")
+                    respondToMessage(message)
+                    statusMessage = "Sending response"
+                } else {
+                    speak("Please specify a message to send.")
+                }
+            }
+        })
+
+        commandRegistry.register(object : Command(
+            keywords = listOf("read the latest whatsapp message", "read latest whatsapp"),
+            description = "Read the latest WhatsApp message"
+        ) {
+            override fun execute(input: String) {
+                speak("Reading the latest WhatsApp message")
+                readLatestWhatsAppMessage()
+                statusMessage = "Reading latest WhatsApp message"
+            }
+        })
+
+        commandRegistry.register(object : Command(
+            keywords = listOf("open messages", "open sms", "messages app"),
+            description = "Open default messaging app"
+        ) {
+            override fun execute(input: String) {
+                speak("Opening default messaging app")
+                openDefaultMessagingApp()
+                statusMessage = "Messaging app opened"
+            }
+        })
+
         // ===== CAMERA/VISION COMMANDS =====
         commandRegistry.register(object : Command(
             keywords = listOf("camera", "photo", "picture", "read this", "what is this", "identify", "scan"),
@@ -445,6 +494,21 @@ class MainActivity : ComponentActivity() {
                         speak("Opening alarms")
                         navigateToActivity(AlarmActivity::class.java, input)
                         statusMessage = "Alarms"
+                    }
+                    appName.contains("whatsapp") -> {
+                        speak("Opening WhatsApp")
+                        openWhatsApp()
+                        statusMessage = "WhatsApp opened"
+                    }
+                    appName.contains("chat") -> {
+                        val contactName = appName.replace("chat", "").trim()
+                        if (contactName.isNotEmpty()) {
+                            speak("Opening $contactName's chat")
+                            openChat(contactName)
+                            statusMessage = "Opening $contactName's chat"
+                        } else {
+                            speak("Please specify a contact name.")
+                        }
                     }
                     appName.isNotEmpty() && appName.length > 2 -> {
                         speak("Opening $appName")
@@ -538,6 +602,53 @@ class MainActivity : ComponentActivity() {
 
     private fun openSettings() {
         startActivity(Intent(Settings.ACTION_SETTINGS))
+    }
+
+    private fun openWhatsApp() {
+        val intent = packageManager.getLaunchIntentForPackage("com.whatsapp")
+        if (intent != null) {
+            startActivity(intent)
+        } else {
+            speak("WhatsApp is not installed on this device.")
+        }
+    }
+
+    private fun openChat(contactName: String) {
+        val intent = Intent(this, ScreenReaderService::class.java).apply {
+            action = "ACTION_OPEN_CHAT"
+            putExtra("contact_name", contactName)
+        }
+        startService(intent)
+    }
+
+    private fun readLastMessage() {
+        val intent = Intent(this, ScreenReaderService::class.java).apply {
+            action = "ACTION_READ_LAST_MESSAGE"
+        }
+        startService(intent)
+    }
+
+    private fun respondToMessage(message: String) {
+        val intent = Intent(this, ScreenReaderService::class.java).apply {
+            action = "ACTION_RESPOND_TO_MESSAGE"
+            putExtra("message", message)
+        }
+        startService(intent)
+    }
+
+    private fun readLatestWhatsAppMessage() {
+        val intent = Intent(this, ScreenReaderService::class.java).apply {
+            action = "ACTION_READ_LATEST_WHATSAPP_MESSAGE"
+        }
+        startService(intent)
+    }
+
+    private fun openDefaultMessagingApp() {
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_APP_MESSAGING)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(intent)
     }
 
     private fun handleEmergency() {
