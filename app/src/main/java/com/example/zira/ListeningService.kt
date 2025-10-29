@@ -17,6 +17,11 @@ class ListeningService : Service() {
     private var isListening = false
     private var ttsInitialized = false
 
+    companion object {
+        const val ACTION_START_LISTENING = "com.example.zira.ACTION_START_LISTENING"
+        const val ACTION_STOP_LISTENING = "com.example.zira.ACTION_STOP_LISTENING"
+    }
+
     override fun onCreate() {
         super.onCreate()
         initializeTTS()
@@ -63,10 +68,6 @@ class ListeningService : Service() {
             override fun onEndOfSpeech() {
                 isListening = false
                 Log.d("ListeningService", "Speech ended")
-                // Restart listening after a short delay
-                android.os.Handler(mainLooper).postDelayed({
-                    startListening()
-                }, 500)
             }
 
             override fun onError(error: Int) {
@@ -78,10 +79,7 @@ class ListeningService : Service() {
                 when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                        // Just restart listening
-                        android.os.Handler(mainLooper).postDelayed({
-                            startListening()
-                        }, 500)
+                        // Do not restart listening automatically
                     }
                     SpeechRecognizer.ERROR_CLIENT,
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
@@ -90,9 +88,7 @@ class ListeningService : Service() {
                     }
                     else -> {
                         speak("Error listening. Retrying...")
-                        android.os.Handler(mainLooper).postDelayed({
-                            startListening()
-                        }, 1000)
+                        // Do not restart listening automatically
                     }
                 }
             }
@@ -105,11 +101,6 @@ class ListeningService : Service() {
                     Log.d("ListeningService", "Recognized command: $command")
                     processCommand(command)
                 }
-
-                // Restart listening after processing
-                android.os.Handler(mainLooper).postDelayed({
-                    startListening()
-                }, 1000)
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
@@ -125,9 +116,6 @@ class ListeningService : Service() {
                 Log.d("ListeningService", "Event received: $eventType")
             }
         })
-
-        // Start listening after initialization
-        startListening()
     }
 
     private fun processCommand(command: String) {
@@ -155,7 +143,7 @@ class ListeningService : Service() {
         }
     }
 
-    private fun startListening() {
+    fun startListening() {
         if (!isListening && ::speechRecognizer.isInitialized) {
             try {
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -206,7 +194,13 @@ class ListeningService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d("ListeningService", "Service started")
-        return START_STICKY // Restart service if killed
+        intent?.action?.let { action ->
+            when (action) {
+                ACTION_START_LISTENING -> startListening()
+                ACTION_STOP_LISTENING -> stopListening()
+            }
+        }
+        return START_STICKY
     }
 
     override fun onDestroy() {
@@ -228,4 +222,11 @@ class ListeningService : Service() {
     override fun onBind(intent: Intent?): IBinder? {
         return null // No binding needed for this service
     }
-}
+
+    fun stopListening() {
+        if (isListening && ::speechRecognizer.isInitialized) {
+            speechRecognizer.stopListening()
+            isListening = false
+            Log.d("ListeningService", "Stopped listening")
+        }
+    }

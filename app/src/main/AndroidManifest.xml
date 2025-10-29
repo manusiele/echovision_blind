@@ -110,6 +110,10 @@
             android:exported="false"
             android:theme="@style/Theme.Zira" />
 
+        <service
+            android:name=".ListeningService"
+            android:exported="false" />
+
     </application>
 
 </manifest>
